@@ -1,0 +1,441 @@
+SAVECHAIN BLOCKCHAIN NOTES
+Topic: React, ethers.js, MetaMask, Sepolia, Solidity, and Hardhat
+Beginner-friendly revision notes
+Date: 19 October 2026
+
+============================================================
+1. THE BIG PICTURE
+============================================================
+
+Our project is called SaveChain. It is a savings-goal application built around an Ethereum smart contract.
+
+The main pieces are:
+
+1. React frontend
+   The website/dashboard that the user sees and clicks.
+
+2. ethers.js
+   A JavaScript library that helps the frontend communicate with an Ethereum wallet and smart contract.
+
+3. MetaMask
+   A wallet application/browser extension. It manages a wallet account and asks the user to approve transactions. It can sign transactions using the wallet's private key.
+
+4. Sepolia
+   A public Ethereum test network. It is separate from MetaMask. MetaMask connects to this network; Sepolia is not "inside" MetaMask.
+
+5. SaveChain smart contract
+   The Solidity program deployed on Sepolia. It contains the rules for setting goals, depositing, tracking savings, and withdrawing.
+
+6. Hardhat
+   A development tool used to compile, test, and deploy the Solidity contract.
+
+7. RPC URL
+   An endpoint through which software communicates with the blockchain network.
+
+Short version:
+React displays the app.
+ethers.js prepares blockchain requests.
+MetaMask approves and signs user transactions.
+Sepolia processes transactions.
+SaveChain's Solidity code runs on Sepolia.
+
+============================================================
+2. WALLET VS. METAMASK VS. SEPOLIA
+============================================================
+
+MetaMask:
+- A wallet application.
+- Helps manage wallet accounts.
+- Can ask you to approve transactions.
+- Uses the account's private key to sign transactions.
+- Connects to a blockchain network, such as Sepolia.
+
+Wallet account:
+- Has a public address, for example: 0xABC...123.
+- Is controlled by a private key.
+- The public address can be shared; the private key must remain secret.
+- The private key is not the wallet address.
+
+Sepolia:
+- A public Ethereum test network.
+- Keeps track of addresses, ETH balances, deployed contracts, and transactions.
+- Processes transactions and executes smart-contract code.
+- Uses test ETH, which is not real-money ETH.
+
+Important:
+The wallet is not physically stored inside Sepolia. The wallet's address and its blockchain state are represented on the network. The private key stays with the wallet/signing setup, not on the blockchain.
+
+Analogy:
+- MetaMask = your wallet app.
+- Private key = the secret key that proves control of the wallet.
+- Sepolia = the public road/network where transactions travel and are processed.
+- SaveChain = a program deployed on that network.
+
+============================================================
+3. WHAT IS A SMART CONTRACT?
+============================================================
+
+A smart contract is a program deployed to a blockchain. Once deployed, users can call its functions by sending transactions or making read-only calls.
+
+Our file:
+contracts/SaveChain.sol
+
+The contract has functions such as:
+- setSavingsGoal(goal)
+- deposit()
+- withdraw(amount)
+- getSavingsProgress()
+
+The contract also stores data:
+- savings[address] = the amount recorded for a wallet
+- savingsGoal[address] = the goal recorded for a wallet
+
+The contract's code runs on the blockchain when a transaction calls a state-changing function. React does not execute the Solidity code itself.
+
+============================================================
+4. WHAT IS ETHERS.JS?
+============================================================
+
+ethers.js is a JavaScript/TypeScript library that helps an application communicate with Ethereum-compatible networks.
+
+It can help the frontend:
+- Connect to MetaMask.
+- Get the connected wallet account.
+- Build a request to call a smart-contract function.
+- Ask the wallet to sign/send a transaction.
+- Read data from a contract.
+- Wait for a transaction to be mined.
+
+ethers.js does not replace MetaMask, Sepolia, or the smart contract. It helps connect the pieces.
+
+============================================================
+5. THE COMPLETE DEPOSIT FLOW
+============================================================
+
+Imagine the user enters 0.1 ETH and clicks the Deposit button.
+
+Step 1 — User clicks the React button
+A button might look like this:
+
+<button onClick={handleDeposit}>Deposit</button>
+
+Meaning:
+When the user clicks the button, React runs the JavaScript function named handleDeposit.
+
+At this point, the click itself has not moved ETH.
+
+Step 2 — The frontend prepares the request
+Example:
+
+const tx = await contract.deposit({
+  value: ethers.parseEther("0.1"),
+});
+
+What this means:
+- contract is an ethers.js object configured to represent the deployed SaveChain contract.
+- deposit() selects the contract function named deposit.
+- value specifies how much ETH to attach to the transaction.
+- ethers.parseEther("0.1") converts 0.1 ETH into wei, Ethereum's smallest standard unit.
+- 1 ETH = 1,000,000,000,000,000,000 wei.
+- 0.1 ETH = 100,000,000,000,000,000 wei.
+
+Step 3 — MetaMask opens
+Because this is a transaction that changes blockchain state and sends ETH, the wallet asks the user to review and approve it.
+
+If the user rejects it, the transaction is not submitted by that approval flow.
+If the user confirms, MetaMask signs the transaction using the connected account's private key and broadcasts it through its network connection.
+
+Step 4 — The signed transaction reaches Sepolia
+The transaction is sent through an RPC connection to the Sepolia network. Network nodes process it, and it can be included in a block.
+
+Step 5 — The SaveChain contract executes
+The transaction calls the deposit() function in the deployed SaveChain contract.
+
+Step 6 — The contract updates the savings record
+If the transaction succeeds, the contract updates the sender's recorded savings and emits an event.
+
+Step 7 — Wait for mining
+Example:
+
+await tx.wait();
+
+This waits for the transaction to be included in a block and the receipt to be returned. The frontend can then refresh the displayed savings data.
+
+The flow in one line:
+React button -> JavaScript handler -> ethers.js contract call -> MetaMask approval/signature -> Sepolia network -> SaveChain deposit() executes -> transaction receipt -> frontend refreshes.
+
+============================================================
+6. HOW DOES ETHERS.JS CONNECT TO METAMASK?
+============================================================
+
+A simplified example:
+
+const provider = new ethers.BrowserProvider(window.ethereum);
+const signer = await provider.getSigner();
+
+const contract = new ethers.Contract(
+  contractAddress,
+  contractABI,
+  signer
+);
+
+Meaning:
+
+provider:
+- Connects ethers.js to the Ethereum provider exposed by MetaMask.
+- Provides access to the selected network and wallet connection.
+
+signer:
+- Represents the connected wallet account for signing transactions.
+- When the app requests a transaction, the wallet can ask the user to approve it.
+
+contract:
+- An ethers.js object that represents the deployed contract.
+- contractAddress tells ethers.js where the contract is deployed.
+- contractABI tells ethers.js which functions and data formats it can use.
+- signer lets the object request signed transactions for state-changing functions.
+
+The ABI is like a function menu/instruction sheet for ethers.js. It describes how to call functions; it is not the contract's full source code.
+
+Note: This example assumes MetaMask is installed, connected, and the contract address is configured.
+
+============================================================
+7. WHAT DOES THE SOLIDITY DEPOSIT FUNCTION DO?
+============================================================
+
+Our contract contains:
+
+function deposit() external payable {
+    if (msg.value == 0) revert InvalidDeposit();
+    savings[msg.sender] += msg.value;
+    emit Deposited(msg.sender, msg.value);
+}
+
+Line by line:
+
+function deposit()
+- Defines a function named deposit.
+
+external
+- The function can be called from outside the contract, such as by our frontend.
+
+payable
+- Allows the function to receive ETH with the call.
+
+msg.value
+- The amount of ETH attached to this particular transaction, measured in wei.
+
+if (msg.value == 0) revert InvalidDeposit();
+- Rejects a zero-value deposit.
+
+msg.sender
+- The address that called the function. In our frontend flow, this is normally the connected wallet account that signed/sent the transaction.
+
+savings[msg.sender] += msg.value;
+- Adds the deposited amount to that wallet's recorded savings.
+
+emit Deposited(...)
+- Emits an event/log containing the wallet address and amount. Applications and blockchain explorers can use transaction logs to identify that a deposit occurred.
+
+Example:
+If the wallet's recorded savings were 0 ETH and the user successfully deposited 0.1 ETH, the mapping would record 0.1 ETH for that wallet.
+
+============================================================
+8. WHERE DOES THE DEPOSITED ETH GO?
+============================================================
+
+When a successful deposit transaction calls the payable deposit() function:
+- The ETH attached to the transaction is transferred to the smart contract's address.
+- The contract's savings mapping records how much the caller has saved.
+- The frontend reads that record to show the user's savings.
+
+The savings mapping is accounting data inside the contract. It is not a separate physical wallet for each user.
+
+The contract's ETH balance and the per-user savings records are related, but they are not the same thing.
+
+============================================================
+9. HOW DOES WITHDRAWAL WORK?
+============================================================
+
+Our contract's withdrawal function follows this basic logic:
+
+1. Reject a withdrawal amount of zero.
+2. Check that the caller's recorded savings are at least the requested amount.
+3. Subtract the amount from the caller's recorded savings.
+4. Send the ETH to the caller's wallet address.
+5. If the transfer fails, revert the transaction.
+
+The frontend initiates the request, and MetaMask asks the user to approve it. Sepolia then executes the withdraw() function.
+
+In our current contract, users do not have to reach their goal before withdrawing. The goal is tracked, but it does not lock the funds.
+
+============================================================
+10. SETTING A SAVINGS GOAL AND READING DATA
+============================================================
+
+Setting a goal:
+- The frontend calls setSavingsGoal(goal).
+- MetaMask asks the user to approve the state-changing transaction.
+- Sepolia executes the function.
+- The contract records the goal for the caller's wallet address.
+
+Reading savings:
+- The frontend can call savings(walletAddress).
+- It can call savingsGoal(walletAddress).
+- It can call getSavingsProgress().
+
+Read-only calls normally do not need a MetaMask transaction approval and do not require the user to pay gas for that read. A read-only call can be made through a provider.
+
+State-changing functions such as deposit(), withdraw(), and setSavingsGoal() require transactions and gas.
+
+============================================================
+11. WHAT IS GAS?
+============================================================
+
+Gas measures the computation/resources used to execute a transaction on Ethereum.
+
+A transaction may require gas to:
+- Deploy a contract.
+- Set a goal.
+- Deposit ETH.
+- Withdraw ETH.
+
+The transaction sender pays the network fee in the network's native currency. On Sepolia, this is test ETH.
+
+The amount attached to a deposit (for example, 0.1 ETH) is separate from the gas fee. The wallet confirmation normally shows the amount and estimated network fee separately.
+
+============================================================
+12. DEPLOYMENT: WHY HARDHAT USES A PRIVATE KEY
+============================================================
+
+Deployment is separate from using the frontend.
+
+Hardhat is a development tool. We use it to compile, test, and deploy the SaveChain contract.
+
+Our Hardhat configuration uses two environment variables:
+
+SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+SEPOLIA_PRIVATE_KEY=YOUR_DEVELOPMENT_WALLET_PRIVATE_KEY
+
+SEPOLIA_RPC_URL:
+- Tells Hardhat which RPC endpoint to contact to communicate with Sepolia.
+- It is the network connection endpoint, not the private key.
+
+SEPOLIA_PRIVATE_KEY:
+- Lets Hardhat sign transactions using the configured deployment wallet.
+- Hardhat uses it when running the deployment script.
+- The deployment wallet needs Sepolia test ETH to pay deployment gas.
+
+The deployment script obtains a signer, deploys SaveChain, waits for deployment, and prints the contract address.
+
+Why is this not the same as MetaMask signing the frontend deposit?
+- During deployment, the Hardhat script signs using the private key loaded from the root .env file.
+- During a frontend deposit, ethers.js uses the signer provided by MetaMask, and MetaMask asks the user to approve and sign.
+- Both transactions can be sent to the same Sepolia network.
+- The accounts may be the same or different, depending on how the project is configured.
+
+Security:
+- Never put a private key in React code or frontend/.env.local.
+- Never commit a private key or root .env file to Git.
+- Never share the private key in chat, screenshots, or public repositories.
+- The frontend only needs the deployed contract address and ABI to interact with the contract.
+
+============================================================
+13. WHAT IS AN RPC URL?
+============================================================
+
+An RPC URL is an endpoint software uses to send requests to a blockchain node.
+
+For our setup:
+Hardhat -> RPC URL -> Sepolia node/network
+
+For the frontend:
+React/ethers.js -> MetaMask's provider -> RPC connection -> Sepolia
+
+The RPC endpoint carries requests and transaction broadcasts. It does not itself sign transactions for your wallet; signing is done by the relevant wallet signer.
+
+============================================================
+14. WHAT DOES THE CONTRACT ADDRESS DO?
+============================================================
+
+After successful deployment, the network gives the deployed SaveChain contract a public address.
+
+The frontend uses it, for example:
+
+VITE_SAVECHAIN_CONTRACT_ADDRESS=THE_DEPLOYED_CONTRACT_ADDRESS
+
+This tells ethers.js which deployed contract to call.
+
+This variable belongs in frontend/.env.local. It is okay for the contract address to be visible in the frontend; it is public information.
+
+The contract ABI must also be available to the frontend so ethers.js knows how to encode function calls.
+
+Do not put SEPOLIA_PRIVATE_KEY in frontend/.env.local. Frontend environment variables prefixed with VITE_ are exposed to browser code.
+
+============================================================
+15. CURRENT SAVECHAIN PROJECT STATUS
+============================================================
+
+Known project setup:
+- Solidity contract: contracts/SaveChain.sol
+- Deployment script: scripts/deploy.ts
+- Hardhat configuration: hardhat.config.ts
+- Frontend: frontend/ (React + TypeScript + Vite)
+- ethers.js installed in the frontend
+- MetaMask connected to the new wallet
+- Network: Sepolia, chain ID 11155111
+- Public RPC URL configured: https://ethereum-sepolia-rpc.publicnode.com
+
+The deployment script previously printed:
+Network: sepolia
+Chain ID: 11155111
+Balance: 0.0 ETH
+Error: Deployer has no ETH.
+
+What that means:
+- Hardhat reached Sepolia successfully.
+- The script stopped because the deployment wallet had no Sepolia test ETH.
+- The contract was NOT deployed by that attempt.
+- The frontend correctly cannot perform contract actions until the contract is deployed and its address is configured.
+
+Next steps:
+1. Obtain Sepolia test ETH for the deployment wallet.
+2. Run from the SaveChain project root:
+   npx hardhat run scripts/deploy.ts --network sepolia
+3. Copy the resulting deployed contract address.
+4. Put it in frontend/.env.local as VITE_SAVECHAIN_CONTRACT_ADDRESS.
+5. Restart the frontend development server.
+6. Connect MetaMask to Sepolia and test setting a goal, depositing, reading savings, and withdrawing.
+
+============================================================
+16. QUICK REVISION: REMEMBER THESE DISTINCTIONS
+============================================================
+
+MetaMask vs Sepolia:
+MetaMask is the wallet app; Sepolia is the blockchain network.
+
+Wallet vs private key:
+The wallet account has a public address and is controlled by a private key. Keep the private key secret.
+
+ethers.js vs Solidity:
+ethers.js runs in the JavaScript application and helps communicate with the contract. Solidity code executes on the blockchain after deployment.
+
+Provider vs signer:
+A provider connects to a network for reading and sending requests. A signer represents an account capable of signing transactions.
+
+Read vs write:
+Reading contract data normally does not require a transaction or gas payment from the user. Changing contract state requires a transaction and gas.
+
+Deployment vs deposit:
+Hardhat deploys the contract. Later, the frontend uses MetaMask to call the deployed contract.
+
+RPC URL vs private key:
+The RPC URL tells software where to connect. The private key authorizes a wallet to sign transactions.
+
+Contract address vs ABI:
+The address says where the contract is. The ABI describes how to call its functions.
+
+One-line deposit flow:
+Click Deposit -> React handler -> ethers.js builds the call -> MetaMask asks for approval and signs -> transaction is broadcast to Sepolia -> SaveChain deposit() executes -> transaction is mined -> frontend refreshes savings.
+
+END OF NOTES
