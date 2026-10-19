@@ -99,3 +99,8 @@ Desktop.ini
 *.tmp
 *.bak
 *.swp
+
+# Personal project notes and documentation
+SaveChain_Blockchain_Notes.txt
+SaveChain_Project_Update_Notes_2026-10-19.txt
+SaveChain_Runbook_and_Transaction_Log.docx
